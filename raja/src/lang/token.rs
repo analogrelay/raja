@@ -8,7 +8,6 @@ pub struct Token {
     kind: TokenKind,
     start: TextLocation,
     end: TextLocation,
-    text: StrTendril,
     value: StrTendril
 }
 
@@ -17,6 +16,8 @@ pub enum TokenKind {
     Unknown,
     Whitespace,
     Newline,
+    Comment,
+    MultiLineComment
 }
 
 impl fmt::Display for TokenKind {
@@ -26,12 +27,11 @@ impl fmt::Display for TokenKind {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, start: TextLocation, end: TextLocation, text: StrTendril, value: StrTendril) -> Token {
+    pub fn new(kind: TokenKind, start: TextLocation, end: TextLocation, value: StrTendril) -> Token {
         Token {
             kind: kind,
             start: start,
             end: end,
-            text: text,
             value: value
         }
     }
@@ -49,11 +49,6 @@ impl Token {
     #[inline]
     pub fn end(&self) -> TextLocation {
         self.end
-    }
-
-    #[inline]
-    pub fn text(&self) -> &StrTendril {
-        &self.text
     }
 
     #[inline]
