@@ -213,11 +213,17 @@ mod test {
                     Comment("// This is a single-line comment"),
                     Newline("\n"),
                     Unknown("a"));
+        token_test!("// This is a single-line comment that isn't terminated",
+                    Comment("// This is a single-line comment that isn't terminated"));
 
         // Span comment
         token_test!("/* this is a span comment but it isn't multi-line */a",
                     Comment("/* this is a span comment but it isn't multi-line */"),
                     Unknown("a"));
+
+        // Unterminated span comment
+        token_test!("/* this is a span comment but it isn't multi-line or terminated",
+                    Comment("/* this is a span comment but it isn't multi-line or terminated"));
 
         // Multi-line (different because it is considered a line terminator)
         token_test!("/* This is a multi\nline\ncomment */a",
