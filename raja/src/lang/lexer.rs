@@ -1,6 +1,10 @@
+extern crate unicode_xid;
+
 use tendril::StrTendril;
 use lang::{TextLocation,Token,TokenKind};
 use std::collections::VecDeque;
+
+use self::unicode_xid::UnicodeXID;
 
 pub struct Lexer {
     buf: StrTendril,
@@ -81,6 +85,12 @@ impl Lexer {
         self.emit(kind)
     }
 
+    fn identifier(&mut self) -> Option<Token> {
+        self.take();
+        self.take_while(is_id_continue);
+        self.emit(TokenKind::Identifier)
+    }
+
     // Helpers
 
     fn take_while<F>(&mut self, predicate: F) where F: Fn(char) -> bool {
@@ -148,11 +158,26 @@ impl Iterator for Lexer {
             None => None,
             Some('/') if self.la('/') => self.single_line_comment(),
             Some('/') if self.la('*') => self.span_comment(),
-            Some(c) if is_nl(c) => self.newline(),
+            Some(x) if is_nl(x) => self.newline(),
             Some(x) if is_ws(x) => self.whitespace(),
+            Some(x) if is_id_start(x) => self.identifier(),
             Some(x) => self.unknown()
         }
     }
+}
+
+fn is_id_continue(ch: char) -> bool {
+    ch == '$' ||
+        ch == '_' ||
+        UnicodeXID::is_xid_continue(ch) ||
+        ch == '\u{200C}' ||
+        ch == '\u{200D}'
+}
+
+fn is_id_start(ch: char) -> bool {
+    ch == '$' ||
+        ch == '_' ||
+        UnicodeXID::is_xid_start(ch)
 }
 
 fn is_ws(ch: char) -> bool {
@@ -212,14 +237,14 @@ mod test {
         token_test!("// This is a single-line comment\na",
                     Comment("// This is a single-line comment"),
                     Newline("\n"),
-                    Unknown("a"));
+                    Identifier("a"));
         token_test!("// This is a single-line comment that isn't terminated",
                     Comment("// This is a single-line comment that isn't terminated"));
 
         // Span comment
         token_test!("/* this is a span comment but it isn't multi-line */a",
                     Comment("/* this is a span comment but it isn't multi-line */"),
-                    Unknown("a"));
+                    Identifier("a"));
 
         // Unterminated span comment
         token_test!("/* this is a span comment but it isn't multi-line or terminated",
@@ -228,15 +253,32 @@ mod test {
         // Multi-line (different because it is considered a line terminator)
         token_test!("/* This is a multi\nline\ncomment */a",
                     MultiLineComment("/* This is a multi\nline\ncomment */"),
-                    Unknown("a"));
+                    Identifier("a"));
 
         // Nesting has no effect
         token_test!("/* this is a /* nested span comment but it isn't multi-line */a",
                     Comment("/* this is a /* nested span comment but it isn't multi-line */"),
-                    Unknown("a"));
+                    Identifier("a"));
         token_test!("/* This is a /* nested multi\nline\ncomment */a",
                     MultiLineComment("/* This is a /* nested multi\nline\ncomment */"),
-                    Unknown("a"));
+                    Identifier("a"));
+    }
+
+    #[test]
+    pub fn identifier_tokens() {
+        token_test!("this_1s_a_val1d_identifier_123",
+                    Identifier("this_1s_a_val1d_identifier_123"));
+        token_test!("valid\u{200D}identifier",
+                    Identifier("valid\u{200D}identifier"));
+        token_test!("valid\u{200C}identifier",
+                    Identifier("valid\u{200C}identifier"));
+        token_test!("$alsovalid",
+                    Identifier("$alsovalid"));
+        token_test!("_alsovalid",
+                    Identifier("_alsovalid"));
+        token_test!("0numberscannotstartidentifiers",
+                    Unknown("0"),
+                    Identifier("numberscannotstartidentifiers"));
     }
 
     fn tokenize(input: &str) -> Vec<Token> {

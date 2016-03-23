@@ -5,3 +5,4 @@ authors = ["Andrew Stanton-Nurse <andrew@andrewnurse.net>"]
 
 [dependencies]
 tendril = "0.2.2"
+unicode-xid = "0.0.3"

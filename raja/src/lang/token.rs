@@ -17,7 +17,8 @@ pub enum TokenKind {
     Whitespace,
     Newline,
     Comment,
-    MultiLineComment
+    MultiLineComment,
+    Identifier,
 }
 
 impl fmt::Display for TokenKind {
