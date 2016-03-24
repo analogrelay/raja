@@ -3,12 +3,13 @@ use std::fmt;
 pub use tendril::StrTendril;
 pub use lang::TextLocation;
 
-#[derive(Clone,Eq,PartialEq)]
+#[derive(Clone,PartialEq)]
 pub struct Token {
     kind: TokenKind,
     start: TextLocation,
     end: TextLocation,
-    value: StrTendril
+    text: StrTendril,
+    value: TokenValue
 }
 
 #[derive(Copy,Clone,Eq,PartialEq,Debug)]
@@ -19,7 +20,8 @@ pub enum TokenKind {
     Comment,
     MultiLineComment,
     IdentifierName,
-    Punctuator
+    Punctuator,
+    NumericLiteral
 }
 
 impl fmt::Display for TokenKind {
@@ -28,12 +30,26 @@ impl fmt::Display for TokenKind {
     }
 }
 
+#[derive(Copy,Clone,PartialEq,Debug)]
+pub enum TokenValue {
+    None,
+    Integer(u64),
+    Float(f64)
+}
+
+impl fmt::Display for TokenValue {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "{:?}", self)
+    }
+}
+
 impl Token {
-    pub fn new(kind: TokenKind, start: TextLocation, end: TextLocation, value: StrTendril) -> Token {
+    pub fn new(kind: TokenKind, start: TextLocation, end: TextLocation, text: StrTendril, value: TokenValue) -> Token {
         Token {
             kind: kind,
             start: start,
             end: end,
+            text: text,
             value: value
         }
     }
@@ -44,17 +60,12 @@ impl Token {
     }
 
     #[inline]
-    pub fn start(&self) -> TextLocation {
-        self.start
+    pub fn text(&self) -> &StrTendril {
+        &self.text
     }
 
     #[inline]
-    pub fn end(&self) -> TextLocation {
-        self.end
-    }
-
-    #[inline]
-    pub fn value(&self) -> &StrTendril {
+    pub fn value(&self) -> &TokenValue {
         &self.value
     }
 }
