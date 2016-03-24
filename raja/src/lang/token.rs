@@ -18,7 +18,8 @@ pub enum TokenKind {
     Newline,
     Comment,
     MultiLineComment,
-    Identifier,
+    IdentifierName,
+    Punctuator
 }
 
 impl fmt::Display for TokenKind {

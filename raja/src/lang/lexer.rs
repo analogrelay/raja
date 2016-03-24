@@ -88,7 +88,7 @@ impl Lexer {
     fn identifier(&mut self) -> Option<Token> {
         self.take();
         self.take_while(is_id_continue);
-        self.emit(TokenKind::Identifier)
+        self.emit(TokenKind::IdentifierName)
     }
 
     // Helpers
@@ -130,6 +130,11 @@ impl Lexer {
         }
     }
 
+    fn take_emit(&mut self, kind: TokenKind) -> Option<Token> {
+        self.take();
+        self.emit(kind)
+    }
+
     fn emit(&mut self, kind: TokenKind) -> Option<Token> {
         if self.val.len32() > 0 {
             Some(Token::new(kind, self.start, self.loc, self.val.clone()))
@@ -155,13 +160,41 @@ impl Iterator for Lexer {
         self.val.clear();
 
         match self.cur {
-            None => None,
+            // Comments
             Some('/') if self.la('/') => self.single_line_comment(),
             Some('/') if self.la('*') => self.span_comment(),
+
+            // Newlines/Whitespace
             Some(x) if is_nl(x) => self.newline(),
             Some(x) if is_ws(x) => self.whitespace(),
+
+            // Identifiers
             Some(x) if is_id_start(x) => self.identifier(),
-            Some(x) => self.unknown()
+
+            // Punctuators (aka Operators, but the ECMA spec calls them Punctuators)
+            Some('{') |
+                Some('}') |
+                Some('(') |
+                Some(')') |
+                Some('[') |
+                Some(']') |
+                Some(';') |
+                Some(',') => self.take_emit(TokenKind::Punctuator),
+            Some('.') => {
+                self.take_assert('.');
+                if self.at('.') && self.la('.') {
+                    self.take_emit("..", TokenKind::Punctuator)
+                }
+                else {
+                    self.emit(TokenKind::Punctuator)
+                }
+            },
+            Some('>') |
+                Some('<') => self.compound_equal(),
+
+            // Fallback cases
+            Some(x) => self.unknown(),
+            None => None,
         }
     }
 }
@@ -237,14 +270,14 @@ mod test {
         token_test!("// This is a single-line comment\na",
                     Comment("// This is a single-line comment"),
                     Newline("\n"),
-                    Identifier("a"));
+                    IdentifierName("a"));
         token_test!("// This is a single-line comment that isn't terminated",
                     Comment("// This is a single-line comment that isn't terminated"));
 
         // Span comment
         token_test!("/* this is a span comment but it isn't multi-line */a",
                     Comment("/* this is a span comment but it isn't multi-line */"),
-                    Identifier("a"));
+                    IdentifierName("a"));
 
         // Unterminated span comment
         token_test!("/* this is a span comment but it isn't multi-line or terminated",
@@ -253,32 +286,83 @@ mod test {
         // Multi-line (different because it is considered a line terminator)
         token_test!("/* This is a multi\nline\ncomment */a",
                     MultiLineComment("/* This is a multi\nline\ncomment */"),
-                    Identifier("a"));
+                    IdentifierName("a"));
 
         // Nesting has no effect
         token_test!("/* this is a /* nested span comment but it isn't multi-line */a",
                     Comment("/* this is a /* nested span comment but it isn't multi-line */"),
-                    Identifier("a"));
+                    IdentifierName("a"));
         token_test!("/* This is a /* nested multi\nline\ncomment */a",
                     MultiLineComment("/* This is a /* nested multi\nline\ncomment */"),
-                    Identifier("a"));
+                    IdentifierName("a"));
     }
 
     #[test]
     pub fn identifier_tokens() {
         token_test!("this_1s_a_val1d_identifier_123",
-                    Identifier("this_1s_a_val1d_identifier_123"));
+                    IdentifierName("this_1s_a_val1d_identifier_123"));
         token_test!("valid\u{200D}identifier",
-                    Identifier("valid\u{200D}identifier"));
+                    IdentifierName("valid\u{200D}identifier"));
         token_test!("valid\u{200C}identifier",
-                    Identifier("valid\u{200C}identifier"));
+                    IdentifierName("valid\u{200C}identifier"));
         token_test!("$alsovalid",
-                    Identifier("$alsovalid"));
+                    IdentifierName("$alsovalid"));
         token_test!("_alsovalid",
-                    Identifier("_alsovalid"));
+                    IdentifierName("_alsovalid"));
         token_test!("0numberscannotstartidentifiers",
                     Unknown("0"),
-                    Identifier("numberscannotstartidentifiers"));
+                    IdentifierName("numberscannotstartidentifiers"));
+    }
+
+    #[test]
+    pub fn punctuator_tokens() {
+        token_test!("{", Punctuator("{"));
+        token_test!("}", Punctuator("}"));
+        token_test!("(", Punctuator("("));
+        token_test!(")", Punctuator(")"));
+        token_test!("[", Punctuator("["));
+        token_test!("]", Punctuator("]"));
+        token_test!(".", Punctuator("."));
+        token_test!("...", Punctuator("..."));
+        token_test!(";", Punctuator(";"));
+        token_test!(",", Punctuator(","));
+        token_test!("<", Punctuator("<"));
+        token_test!(">", Punctuator(">"));
+        token_test!("<=", Punctuator("<="));
+        token_test!(">=", Punctuator(">="));
+        token_test!("==", Punctuator("=="));
+        token_test!("!=", Punctuator("!="));
+        token_test!("===", Punctuator("==="));
+        token_test!("!==", Punctuator("!=="));
+        token_test!("+", Punctuator("+"));
+        token_test!("-", Punctuator("-"));
+        token_test!("*", Punctuator("*"));
+        token_test!("/", Punctuator("/"));
+        token_test!("%", Punctuator("%"));
+        token_test!("++", Punctuator("++"));
+        token_test!("--", Punctuator("--"));
+        token_test!("<<", Punctuator("<<"));
+        token_test!(">>", Punctuator(">>"));
+        token_test!(">>>", Punctuator(">>>"));
+        token_test!("&", Punctuator("&"));
+        token_test!("&&", Punctuator("&&"));
+        token_test!("|", Punctuator("|"));
+        token_test!("||", Punctuator("||"));
+        token_test!("?", Punctuator("?"));
+        token_test!(":", Punctuator(":"));
+        token_test!("=", Punctuator("="));
+        token_test!("+=", Punctuator("+="));
+        token_test!("-=", Punctuator("-="));
+        token_test!("*=", Punctuator("*="));
+        token_test!("/=", Punctuator("/="));
+        token_test!("%=", Punctuator("%="));
+        token_test!("<<=", Punctuator("<<="));
+        token_test!(">>=", Punctuator(">>="));
+        token_test!(">>>=", Punctuator(">>>="));
+        token_test!("&=", Punctuator("&="));
+        token_test!("|=", Punctuator("|="));
+        token_test!("^=", Punctuator("^="));
+        token_test!("=>", Punctuator("=>"));
     }
 
     fn tokenize(input: &str) -> Vec<Token> {
