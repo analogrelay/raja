@@ -4,6 +4,7 @@ use tendril::StrTendril;
 use lang::{TextLocation,Token,TokenKind,TokenValue};
 use std::collections::VecDeque;
 use std::str::FromStr;
+use std::char;
 
 use self::unicode_xid::UnicodeXID;
 
@@ -147,7 +148,7 @@ impl Lexer {
             TokenValue::Integer(u64::from_str(&self.text).unwrap())
         };
 
-        self.emit(TokenKind::NumericLiteral, val)
+        self.emit(TokenKind::Literal, val)
     }
 
     fn bin_literal(&mut self) -> Option<Token> {
@@ -160,7 +161,7 @@ impl Lexer {
             val = self.cur.unwrap().to_digit(2).unwrap() as u64 + (val * 2) as u64;
             self.take();
         }
-        self.emit(TokenKind::NumericLiteral, TokenValue::Integer(val))
+        self.emit(TokenKind::Literal, TokenValue::Integer(val))
     }
 
     fn oct_literal(&mut self) -> Option<Token> {
@@ -173,7 +174,7 @@ impl Lexer {
             val = self.cur.unwrap().to_digit(8).unwrap() as u64 + (val * 8) as u64;
             self.take();
         }
-        self.emit(TokenKind::NumericLiteral, TokenValue::Integer(val))
+        self.emit(TokenKind::Literal, TokenValue::Integer(val))
     }
 
     fn hex_literal(&mut self) -> Option<Token> {
@@ -182,11 +183,87 @@ impl Lexer {
         self.take();
 
         let mut val = 0u64;
-        while self.at_match(|c| (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+        while self.at_match(is_hex_digit) {
             val = self.cur.unwrap().to_digit(16).unwrap() as u64 + (val * 16) as u64;
             self.take();
         }
-        self.emit(TokenKind::NumericLiteral, TokenValue::Integer(val))
+        self.emit(TokenKind::Literal, TokenValue::Integer(val))
+    }
+
+    fn quoted(&mut self, quote: char) -> Option<Token> {
+        self.take_assert(quote);
+
+        let mut val = String::new();
+        while let Some(c) = self.cur {
+            match c {
+                c if c == quote => { self.take(); break },
+                '\\' => {
+                    self.take();
+                    match self.cur {
+                        Some('b') => { self.take(); val.push('\u{0008}') },
+                        Some('t') => { self.take(); val.push('\u{0009}') },
+                        Some('n') => { self.take(); val.push('\u{000A}') },
+                        Some('v') => { self.take(); val.push('\u{000B}') },
+                        Some('f') => { self.take(); val.push('\u{000C}') },
+                        Some('r') => { self.take(); val.push('\u{000D}') },
+                        Some('\'') => { self.take(); val.push('\'') },
+                        Some('\\') => { self.take(); val.push('\\') },
+                        Some('0') => { self.take(); val.push('\0') },
+                        Some('"') => { self.take(); val.push('"') },
+                        Some('x') => {
+                            self.take();
+                            if self.at_match(is_hex_digit) {
+                                let mut code = self.cur.unwrap().to_digit(16).unwrap();
+                                self.take();
+                                if self.at_match(is_hex_digit) {
+                                    code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                    self.take();
+                                    val.push(char::from_u32(code).unwrap());
+                                }
+                            }
+                        },
+                        Some('u') => {
+                            self.take();
+
+                            // So totally the worst way to do this.
+                            let mut code = 0u32;
+                            if self.at('{') {
+                                self.take();
+                                while self.at_match(|c| c != '}' && c != quote) {
+                                    code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                    self.take();
+                                }
+                                self.take_if('}');
+                            } else if self.at_match(is_hex_digit) {
+                                code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                self.take();
+                                if self.at_match(is_hex_digit) {
+                                    code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                    self.take();
+                                    if self.at_match(is_hex_digit) {
+                                        code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                        self.take();
+                                        if self.at_match(is_hex_digit) {
+                                            code = self.cur.unwrap().to_digit(16).unwrap() + (code * 16);
+                                            self.take();
+                                        }
+                                    }
+                                }
+                            }
+                            val.push(char::from_u32(code).unwrap());
+                        },
+                        Some('\n') => self.take(),
+                        Some(c) => self.take(),
+                        None => {}
+                    }
+                },
+                x => {
+                    val.push(x);
+                    self.take();
+                }
+            }
+        }
+        self.emit(TokenKind::Literal, TokenValue::String(val))
     }
 
     // Helpers
@@ -285,6 +362,10 @@ impl Iterator for Lexer {
             Some('/') if self.la('/') => self.single_line_comment(),
             Some('/') if self.la('*') => self.span_comment(),
 
+            // Strings
+            Some('"') => self.quoted('"'),
+            Some('\'') => self.quoted('\''),
+
             // Newlines/Whitespace
             Some(x) if is_nl(x) => self.newline(),
             Some(x) if is_ws(x) => self.whitespace(),
@@ -371,6 +452,10 @@ fn is_nl(ch: char) -> bool {
 
 fn is_digit(ch: char) -> bool {
     ch >= '0' && ch <= '9'
+}
+
+fn is_hex_digit(ch: char) -> bool {
+    (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
 }
 
 #[cfg(test)]
@@ -466,7 +551,7 @@ mod test {
         token_test!("_alsovalid",
                     IdentifierName("_alsovalid"));
         token_test!("0id",
-                    NumericLiteral("0", TokenValue::Integer(0)),
+                    Literal("0", TokenValue::Integer(0)),
                     IdentifierName("id", TokenValue::None));
     }
 
@@ -524,46 +609,75 @@ mod test {
     #[test]
     pub fn numeric_literal_tokens() {
         // Decimal
-        token_test!("0", NumericLiteral("0", TokenValue::Integer(0)));
-        token_test!("123", NumericLiteral("123", TokenValue::Integer(123)));
-        token_test!(".12", NumericLiteral(".12", TokenValue::Float(0.12)));
-        token_test!("123.45", NumericLiteral("123.45", TokenValue::Float(123.45)));
-        token_test!("123e1", NumericLiteral("123e1", TokenValue::Float(1230f64)));
-        token_test!("123e+1", NumericLiteral("123e+1", TokenValue::Float(1230f64)));
-        token_test!("123e-1", NumericLiteral("123e-1", TokenValue::Float(12.3)));
-        token_test!("123E1", NumericLiteral("123E1", TokenValue::Float(1230f64)));
-        token_test!("123E+1", NumericLiteral("123E+1", TokenValue::Float(1230f64)));
-        token_test!("123E-1", NumericLiteral("123E-1", TokenValue::Float(12.3)));
-        token_test!("123.45e1", NumericLiteral("123.45e1", TokenValue::Float(1234.5)));
-        token_test!("123.45e+1", NumericLiteral("123.45e+1", TokenValue::Float(1234.5)));
-        token_test!("123.45e-1", NumericLiteral("123.45e-1", TokenValue::Float(12.345)));
-        token_test!("123.45E1", NumericLiteral("123.45E1", TokenValue::Float(1234.5)));
-        token_test!("123.45E+1", NumericLiteral("123.45E+1", TokenValue::Float(1234.5)));
-        token_test!("123.45E-1", NumericLiteral("123.45E-1", TokenValue::Float(12.345)));
+        token_test!("0", Literal("0", TokenValue::Integer(0)));
+        token_test!("123", Literal("123", TokenValue::Integer(123)));
+        token_test!(".12", Literal(".12", TokenValue::Float(0.12)));
+        token_test!("123.45", Literal("123.45", TokenValue::Float(123.45)));
+        token_test!("123e1", Literal("123e1", TokenValue::Float(1230f64)));
+        token_test!("123e+1", Literal("123e+1", TokenValue::Float(1230f64)));
+        token_test!("123e-1", Literal("123e-1", TokenValue::Float(12.3)));
+        token_test!("123E1", Literal("123E1", TokenValue::Float(1230f64)));
+        token_test!("123E+1", Literal("123E+1", TokenValue::Float(1230f64)));
+        token_test!("123E-1", Literal("123E-1", TokenValue::Float(12.3)));
+        token_test!("123.45e1", Literal("123.45e1", TokenValue::Float(1234.5)));
+        token_test!("123.45e+1", Literal("123.45e+1", TokenValue::Float(1234.5)));
+        token_test!("123.45e-1", Literal("123.45e-1", TokenValue::Float(12.345)));
+        token_test!("123.45E1", Literal("123.45E1", TokenValue::Float(1234.5)));
+        token_test!("123.45E+1", Literal("123.45E+1", TokenValue::Float(1234.5)));
+        token_test!("123.45E-1", Literal("123.45E-1", TokenValue::Float(12.345)));
 
         // Hex
-        token_test!("0xABCD", NumericLiteral("0xABCD", TokenValue::Integer(0xABCD)));
-        token_test!("0XABCD", NumericLiteral("0XABCD", TokenValue::Integer(0xABCD)));
+        token_test!("0xABCD", Literal("0xABCD", TokenValue::Integer(0xABCD)));
+        token_test!("0XABCD", Literal("0XABCD", TokenValue::Integer(0xABCD)));
 
         // Octal
-        token_test!("0o01234567", NumericLiteral("0o01234567", TokenValue::Integer(0o01234567)));
-        token_test!("0O01234567", NumericLiteral("0O01234567", TokenValue::Integer(0o01234567)));
+        token_test!("0o01234567", Literal("0o01234567", TokenValue::Integer(0o01234567)));
+        token_test!("0O01234567", Literal("0O01234567", TokenValue::Integer(0o01234567)));
         token_test!("0o08",
-                    NumericLiteral("0o0", TokenValue::Integer(0)),
-                    NumericLiteral("8", TokenValue::Integer(8)));
+                    Literal("0o0", TokenValue::Integer(0)),
+                    Literal("8", TokenValue::Integer(8)));
         token_test!("0O08",
-                    NumericLiteral("0O0", TokenValue::Integer(0)),
-                    NumericLiteral("8", TokenValue::Integer(8)));
+                    Literal("0O0", TokenValue::Integer(0)),
+                    Literal("8", TokenValue::Integer(8)));
 
         // Binary
-        token_test!("0b01", NumericLiteral("0b01", TokenValue::Integer(1)));
-        token_test!("0B01", NumericLiteral("0B01", TokenValue::Integer(1)));
+        token_test!("0b01", Literal("0b01", TokenValue::Integer(1)));
+        token_test!("0B01", Literal("0B01", TokenValue::Integer(1)));
         token_test!("0b02",
-                    NumericLiteral("0b0", TokenValue::Integer(0)),
-                    NumericLiteral("2", TokenValue::Integer(2)));
+                    Literal("0b0", TokenValue::Integer(0)),
+                    Literal("2", TokenValue::Integer(2)));
         token_test!("0B02",
-                    NumericLiteral("0B0", TokenValue::Integer(0)),
-                    NumericLiteral("2", TokenValue::Integer(2)));
+                    Literal("0B0", TokenValue::Integer(0)),
+                    Literal("2", TokenValue::Integer(2)));
+    }
+
+    #[test]
+    fn string_tokens() {
+        token_test!("\"abc\"", Literal("\"abc\"", TokenValue::String("abc".to_string())));
+        token_test!("'abc'", Literal("'abc'", TokenValue::String("abc".to_string())));
+
+        token_test!("\"a\\\"bc\"", Literal("\"a\\\"bc\"", TokenValue::String("a\"bc".to_string())));
+        token_test!("'a\\'bc'", Literal("'a\\'bc'", TokenValue::String("a'bc".to_string())));
+
+        token_test!("\"a\\\nbc\"", Literal("\"a\\\nbc\"", TokenValue::String("abc".to_string())));
+        token_test!("'a\\\nbc'", Literal("'a\\\nbc'", TokenValue::String("abc".to_string())));
+
+        token_test!("\"a\\nbc\"", Literal("\"a\\nbc\"", TokenValue::String("a\nbc".to_string())));
+        token_test!("'a\\nbc'", Literal("'a\\nbc'", TokenValue::String("a\nbc".to_string())));
+
+        token_test!("\"\\0\"", Literal("\"\\0\"", TokenValue::String("\u{0000}".to_string())));
+        token_test!("\"\\b\"", Literal("\"\\b\"", TokenValue::String("\u{0008}".to_string())));
+        token_test!("\"\\t\"", Literal("\"\\t\"", TokenValue::String("\u{0009}".to_string())));
+        token_test!("\"\\n\"", Literal("\"\\n\"", TokenValue::String("\u{000A}".to_string())));
+        token_test!("\"\\v\"", Literal("\"\\v\"", TokenValue::String("\u{000B}".to_string())));
+        token_test!("\"\\f\"", Literal("\"\\f\"", TokenValue::String("\u{000C}".to_string())));
+        token_test!("\"\\r\"", Literal("\"\\r\"", TokenValue::String("\u{000D}".to_string())));
+        token_test!("\"\\\\\"", Literal("\"\\\\\"", TokenValue::String("\\".to_string())));
+        token_test!("\"\\\"\"", Literal("\"\\\"\"", TokenValue::String("\"".to_string())));
+
+        token_test!("\"\\x0A\"", Literal("\"\\x0A\"", TokenValue::String("\u{000A}".to_string())));
+        token_test!("\"\\u{FEFF}\"", Literal("\"\\u{FEFF}\"", TokenValue::String("\u{FEFF}".to_string())));
+        token_test!("\"\\uFEFF\"", Literal("\"\\uFEFF\"", TokenValue::String("\u{FEFF}".to_string())));
     }
 
     fn tokenize(input: &str) -> Vec<Token> {

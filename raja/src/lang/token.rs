@@ -21,7 +21,7 @@ pub enum TokenKind {
     MultiLineComment,
     IdentifierName,
     Punctuator,
-    NumericLiteral
+    Literal
 }
 
 impl fmt::Display for TokenKind {
@@ -30,11 +30,12 @@ impl fmt::Display for TokenKind {
     }
 }
 
-#[derive(Copy,Clone,PartialEq,Debug)]
+#[derive(Clone,PartialEq,Debug)]
 pub enum TokenValue {
     None,
     Integer(u64),
-    Float(f64)
+    Float(f64),
+    String(String)
 }
 
 impl fmt::Display for TokenValue {
