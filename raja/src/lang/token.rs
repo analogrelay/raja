@@ -3,7 +3,7 @@ use std::fmt;
 pub use tendril::StrTendril;
 pub use lang::TextLocation;
 
-#[derive(Clone,PartialEq)]
+#[derive(Debug,Clone,PartialEq)]
 pub struct Token {
     kind: TokenKind,
     start: TextLocation,

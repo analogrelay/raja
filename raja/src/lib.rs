@@ -1,3 +1,3 @@
-mod lang;
+pub mod lang;
 
 extern crate tendril;

@@ -18,12 +18,13 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(mut buf: StrTendril) -> Lexer {
-        let ch = buf.pop_front_char();
+    pub fn new<S>(mut buf: S) -> Lexer where S: Into<StrTendril> {
+        let mut tendril = buf.into();
+        let ch = tendril.pop_front_char();
         let mut la = VecDeque::new();
-        la.push_front(buf.pop_front_char());
+        la.push_front(tendril.pop_front_char());
         Lexer {
-            buf: buf,
+            buf: tendril,
             loc: TextLocation::new(0, 0, 0),
             cur: ch,
             lookahead: la,
