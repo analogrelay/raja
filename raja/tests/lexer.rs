@@ -15,6 +15,7 @@ mod lexer {
         }
     }
 
+    lexer_test!(assorted_keywords);
     lexer_test!(simple_expressions);
     lexer_test!(string_literals);
     lexer_test!(numeric_literals);
