@@ -1,22 +1,36 @@
-Token { kind: Literal, start: TextLocation { line: 0, column: 0, offset: 0 }, end: TextLocation { line: 0, column: 1, offset: 1 }, text: Tendril<UTF8>(inline: "1"), value: Integer(1) }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 1, offset: 1 }, end: TextLocation { line: 0, column: 2, offset: 2 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Punctuator, start: TextLocation { line: 0, column: 2, offset: 2 }, end: TextLocation { line: 0, column: 3, offset: 3 }, text: Tendril<UTF8>(inline: "+"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 3, offset: 3 }, end: TextLocation { line: 0, column: 4, offset: 4 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: IdentifierName, start: TextLocation { line: 0, column: 4, offset: 4 }, end: TextLocation { line: 0, column: 5, offset: 5 }, text: Tendril<UTF8>(inline: "a"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 5, offset: 5 }, end: TextLocation { line: 0, column: 6, offset: 6 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Punctuator, start: TextLocation { line: 0, column: 6, offset: 6 }, end: TextLocation { line: 0, column: 7, offset: 7 }, text: Tendril<UTF8>(inline: "*"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 7, offset: 7 }, end: TextLocation { line: 0, column: 8, offset: 8 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Literal, start: TextLocation { line: 0, column: 8, offset: 8 }, end: TextLocation { line: 0, column: 9, offset: 9 }, text: Tendril<UTF8>(inline: "2"), value: Integer(2) }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 9, offset: 9 }, end: TextLocation { line: 0, column: 10, offset: 10 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Punctuator, start: TextLocation { line: 0, column: 10, offset: 10 }, end: TextLocation { line: 0, column: 11, offset: 11 }, text: Tendril<UTF8>(inline: "/"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 11, offset: 11 }, end: TextLocation { line: 0, column: 12, offset: 12 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: IdentifierName, start: TextLocation { line: 0, column: 12, offset: 12 }, end: TextLocation { line: 0, column: 13, offset: 13 }, text: Tendril<UTF8>(inline: "c"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 13, offset: 13 }, end: TextLocation { line: 0, column: 14, offset: 14 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Punctuator, start: TextLocation { line: 0, column: 14, offset: 14 }, end: TextLocation { line: 0, column: 15, offset: 15 }, text: Tendril<UTF8>(inline: "%"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 15, offset: 15 }, end: TextLocation { line: 0, column: 16, offset: 16 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Literal, start: TextLocation { line: 0, column: 16, offset: 16 }, end: TextLocation { line: 0, column: 17, offset: 17 }, text: Tendril<UTF8>(inline: "3"), value: Integer(3) }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 17, offset: 17 }, end: TextLocation { line: 0, column: 18, offset: 18 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Punctuator, start: TextLocation { line: 0, column: 18, offset: 18 }, end: TextLocation { line: 0, column: 19, offset: 19 }, text: Tendril<UTF8>(inline: "&"), value: None }
-Token { kind: Whitespace, start: TextLocation { line: 0, column: 19, offset: 19 }, end: TextLocation { line: 0, column: 20, offset: 20 }, text: Tendril<UTF8>(inline: " "), value: None }
-Token { kind: Literal, start: TextLocation { line: 0, column: 20, offset: 20 }, end: TextLocation { line: 0, column: 21, offset: 21 }, text: Tendril<UTF8>(inline: "4"), value: Integer(4) }
-Token { kind: Newline, start: TextLocation { line: 0, column: 21, offset: 21 }, end: TextLocation { line: 1, column: 0, offset: 22 }, text: Tendril<UTF8>(inline: "\n"), value: None }
+          Literal (Integer(1)                                                  ) (0, 0; 0)    -> (0, 1; 1)    [1]
+       Whitespace (None                                                        ) (0, 1; 1)    -> (0, 2; 2)    [ ]
+       Punctuator (Op(Plus)                                                    ) (0, 2; 2)    -> (0, 3; 3)    [+]
+       Whitespace (None                                                        ) (0, 3; 3)    -> (0, 4; 4)    [ ]
+   IdentifierName (None                                                        ) (0, 4; 4)    -> (0, 5; 5)    [a]
+       Whitespace (None                                                        ) (0, 5; 5)    -> (0, 6; 6)    [ ]
+       Punctuator (Op(Star)                                                    ) (0, 6; 6)    -> (0, 7; 7)    [*]
+       Whitespace (None                                                        ) (0, 7; 7)    -> (0, 8; 8)    [ ]
+          Literal (Integer(2)                                                  ) (0, 8; 8)    -> (0, 9; 9)    [2]
+       Whitespace (None                                                        ) (0, 9; 9)    -> (0, 10; 10)  [ ]
+       Punctuator (Op(Divide)                                                  ) (0, 10; 10)  -> (0, 11; 11)  [/]
+       Whitespace (None                                                        ) (0, 11; 11)  -> (0, 12; 12)  [ ]
+   IdentifierName (None                                                        ) (0, 12; 12)  -> (0, 13; 13)  [c]
+       Whitespace (None                                                        ) (0, 13; 13)  -> (0, 14; 14)  [ ]
+       Punctuator (Op(Percent)                                                 ) (0, 14; 14)  -> (0, 15; 15)  [%]
+       Whitespace (None                                                        ) (0, 15; 15)  -> (0, 16; 16)  [ ]
+          Literal (Integer(3)                                                  ) (0, 16; 16)  -> (0, 17; 17)  [3]
+       Whitespace (None                                                        ) (0, 17; 17)  -> (0, 18; 18)  [ ]
+       Punctuator (Op(And)                                                     ) (0, 18; 18)  -> (0, 19; 19)  [&]
+       Whitespace (None                                                        ) (0, 19; 19)  -> (0, 20; 20)  [ ]
+          Literal (Integer(4)                                                  ) (0, 20; 20)  -> (0, 21; 21)  [4]
+          Newline (None                                                        ) (0, 21; 21)  -> (1, 0; 22)   [\n]
+   IdentifierName (None                                                        ) (1, 0; 22)   -> (1, 1; 23)   [a]
+       Whitespace (None                                                        ) (1, 1; 23)   -> (1, 2; 24)   [ ]
+       Punctuator (Op(AndAnd)                                                  ) (1, 2; 24)   -> (1, 4; 26)   [&&]
+       Whitespace (None                                                        ) (1, 4; 26)   -> (1, 5; 27)   [ ]
+   IdentifierName (None                                                        ) (1, 5; 27)   -> (1, 6; 28)   [b]
+       Whitespace (None                                                        ) (1, 6; 28)   -> (1, 7; 29)   [ ]
+       Punctuator (Op(AndAnd)                                                  ) (1, 7; 29)   -> (1, 9; 31)   [&&]
+       Whitespace (None                                                        ) (1, 9; 31)   -> (1, 10; 32)  [ ]
+   IdentifierName (None                                                        ) (1, 10; 32)  -> (1, 11; 33)  [c]
+       Whitespace (None                                                        ) (1, 11; 33)  -> (1, 12; 34)  [ ]
+       Punctuator (Op(OrOr)                                                    ) (1, 12; 34)  -> (1, 14; 36)  [||]
+       Whitespace (None                                                        ) (1, 14; 36)  -> (1, 15; 37)  [ ]
+   IdentifierName (None                                                        ) (1, 15; 37)  -> (1, 16; 38)  [d]
+          Newline (None                                                        ) (1, 16; 38)  -> (2, 0; 39)   [\n]

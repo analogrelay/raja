@@ -1,7 +1,7 @@
 use std::fmt;
 
 pub use tendril::StrTendril;
-pub use lang::TextLocation;
+pub use lang::{Operator,Keyword,TextLocation};
 
 #[derive(Debug,Clone,PartialEq)]
 pub struct Token {
@@ -35,7 +35,9 @@ pub enum TokenValue {
     None,
     Integer(u64),
     Float(f64),
-    String(String)
+    String(String),
+    Op(Operator),
+    Kwd(Keyword)
 }
 
 impl fmt::Display for TokenValue {
@@ -68,5 +70,15 @@ impl Token {
     #[inline]
     pub fn value(&self) -> &TokenValue {
         &self.value
+    }
+
+    #[inline]
+    pub fn start(&self) -> TextLocation {
+        self.start
+    }
+
+    #[inline]
+    pub fn end(&self) -> TextLocation {
+        self.end
     }
 }

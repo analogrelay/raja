@@ -10,14 +10,17 @@ mod lexer {
         ($name:ident) => {
             #[test]
             pub fn $name() {
-                run_lexer_test(stringify!($name), concat!(stringify!($name), ".js"), concat!(stringify!($name), ".baseline"));
+                run_lexer_test(concat!(stringify!($name), ".js"), concat!(stringify!($name), ".baseline"));
             }
         }
     }
 
     lexer_test!(simple_expressions);
+    lexer_test!(string_literals);
+    lexer_test!(numeric_literals);
+    lexer_test!(comments);
 
-    fn run_lexer_test(name: &'static str, input_name: &'static str, baseline_name: &'static str) {
+    fn run_lexer_test(input_name: &'static str, baseline_name: &'static str) {
         // Locate files
         let data_dir = env::current_dir().unwrap()
             .join("tests")
@@ -31,7 +34,7 @@ mod lexer {
             .read_to_string(&mut input).unwrap();
 
         let lex = lang::Lexer::new(input);
-        let result = lex.map(|t| format!("{:?}", t)).collect::<Vec<_>>().join("\n");
+        let result = lex.map(|t| render(t)).collect::<Vec<_>>().join("\n");
 
         if generate_baseline() {
             fs::File::create(&baseline_file)
@@ -51,5 +54,15 @@ mod lexer {
             Ok(ref x) if x == "1" => true,
             _ => false
         }
+    }
+
+    fn render(t: lang::Token) -> String {
+        let text : String = t.text().chars().flat_map(|c| c.escape_default()).collect();
+        format!("{: >17} ({: <60}) {: <12} -> {: <12} [{}]",
+            format!("{:?}", t.kind()),
+            format!("{:?}", t.value()),
+            format!("{}", t.start()),
+            format!("{}", t.end()),
+            text)
     }
 }

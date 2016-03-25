@@ -1,7 +1,7 @@
 extern crate unicode_xid;
 
 use tendril::StrTendril;
-use lang::{TextLocation,Token,TokenKind,TokenValue};
+use lang::{TextLocation,Token,TokenKind,TokenValue,Operator,Keyword};
 use std::collections::VecDeque;
 use std::str::FromStr;
 use std::char;
@@ -91,37 +91,60 @@ impl Lexer {
     fn identifier(&mut self) -> Option<Token> {
         self.take();
         self.take_while(is_id_continue);
-        self.emit(TokenKind::IdentifierName, TokenValue::None)
+        match Keyword::get(self.text.as_ref()) {
+            Some(k) => self.emit(TokenKind::IdentifierName, TokenValue::Kwd(k)),
+            None => self.emit(TokenKind::IdentifierName, TokenValue::None)
+        }
     }
 
     fn comparison_or_shift(&mut self) -> Option<Token> {
-        let original = self.cur.unwrap();
-        self.take();
-        match self.cur {
-            Some('=') => self.take(),
-            Some(original) => {
-                self.take();
-                if original == '>' && self.at('>') {
-                    self.take();
+        let original = self.take().unwrap();
+
+        match (original, self.cur) {
+            ('>', Some('=')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::GreaterThanEqual)),
+            ('>', Some('>')) if self.la('>') => {
+                self.take(); /* > */
+                self.take(); /* > */
+                if self.take_if('=') {
+                    self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::UnsignedRightShiftAssign))
                 }
-                self.take_if('=');
+                else {
+                    self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::UnsignedRightShift))
+                }
             }
-            _ => {}
+            ('>', Some('>')) if self.la('=') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::RightShiftAssign)),
+            ('>', Some('>')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::RightShift)),
+            ('>', _) => self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::GreaterThan)),
+
+            ('<', Some('=')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::LessThanEqual)),
+            ('<', Some('<')) if self.la('=') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::LeftShiftAssign)),
+            ('<', Some('<')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::LeftShift)),
+            ('<', _) => self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::LessThan)),
+            _ => panic!("unexpected comparison/shift sequence: {}", original)
         }
-        self.emit(TokenKind::Punctuator, TokenValue::None)
     }
 
     fn equality(&mut self) -> Option<Token> {
-        self.take();
-        self.take_if('=');
-        self.take_if('=');
-        self.emit(TokenKind::Punctuator, TokenValue::None)
+        let original = self.take().unwrap();
+
+        match (original, self.cur) {
+            ('=', Some('=')) if self.la('=') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::Identical)),
+            ('=', Some('=')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::Equal)),
+            ('=', _) => self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::Assign)),
+            ('!', Some('=')) if self.la('=') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::NotIdentical)),
+            ('!', Some('=')) => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::NotEqual)),
+            ('!', _) => self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::Not)),
+            _ => panic!("unexpected equality sequence: {}", original)
+        }
     }
 
-    fn arith_and_logic(&mut self) -> Option<Token> {
+    fn arith_and_logic(&mut self, normal: Operator, equal: Operator) -> Option<Token> {
         self.take();
-        self.take_if('=');
-        self.emit(TokenKind::Punctuator, TokenValue::None)
+        if self.take_if('=') {
+            self.emit(TokenKind::Punctuator, TokenValue::Op(equal))
+        } else {
+            self.emit(TokenKind::Punctuator, TokenValue::Op(normal))
+        }
     }
 
     fn dec_literal(&mut self) -> Option<Token> {
@@ -253,8 +276,8 @@ impl Lexer {
                             }
                             val.push(char::from_u32(code).unwrap());
                         },
-                        Some('\n') => self.take(),
-                        Some(c) => self.take(),
+                        Some('\n') => { self.take(); },
+                        Some(c) => { self.take(); },
                         None => {}
                     }
                 },
@@ -268,9 +291,12 @@ impl Lexer {
     }
 
     // Helpers
-    fn take_if(&mut self, ch: char) {
+    fn take_if(&mut self, ch: char) -> bool {
         if self.at(ch) {
             self.take();
+            true
+        } else {
+            false
         }
     }
 
@@ -284,16 +310,19 @@ impl Lexer {
         }
     }
 
-    fn take_assert(&mut self, ch: char) {
+    fn take_assert(&mut self, ch: char) -> char {
         assert_eq!(Some(ch), self.cur);
-        self.take()
+        self.take().unwrap()
     }
 
-    fn take(&mut self) {
+    fn take(&mut self) -> Option<char> {
         if let Some(c) = self.cur {
             self.text.try_push_char(c).unwrap();
+            self.skip();
+            Some(c)
+        } else {
+            None
         }
-        self.skip();
     }
 
     fn skip(&mut self) {
@@ -311,9 +340,11 @@ impl Lexer {
         }
     }
 
-    fn take_emit(&mut self, kind: TokenKind) -> Option<Token> {
-        self.take();
-        self.emit(kind, TokenValue::None)
+    fn take_emit(&mut self, n: usize, kind: TokenKind, value: TokenValue) -> Option<Token> {
+        for i in 0..n {
+            self.take();
+        }
+        self.emit(kind, value)
     }
 
     fn emit(&mut self, kind: TokenKind, value: TokenValue) -> Option<Token> {
@@ -385,39 +416,41 @@ impl Iterator for Lexer {
             Some(x) if is_digit(x) => self.dec_literal(),
 
             // Punctuators (aka Operators, but the ECMA spec calls them Punctuators)
-            Some('{') |
-                Some('}') |
-                Some('(') |
-                Some(')') |
-                Some('[') |
-                Some(']') |
-                Some(';') |
-                Some(',') |
-                Some('?') |
-                Some(':') => self.take_emit(TokenKind::Punctuator),
+            Some('{') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::LBrace)),
+            Some('}') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::RBrace)),
+            Some('(') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::LParen)),
+            Some(')') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::RParen)),
+            Some('[') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::LBracket)),
+            Some(']') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::RBracket)),
+            Some(';') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::Semicolon)),
+            Some(',') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::Comma)),
+            Some('?') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::Question)),
+            Some(':') => self.take_emit(1, TokenKind::Punctuator, TokenValue::Op(Operator::Colon)),
             Some('.') => {
                 self.take_assert('.');
                 if self.at('.') && self.la('.') {
                     self.take_assert('.');
                     self.take_assert('.');
+                    self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::Elipsis))
+                } else {
+                    self.emit(TokenKind::Punctuator, TokenValue::Op(Operator::Dot))
                 }
-                self.emit(TokenKind::Punctuator, TokenValue::None)
             },
             Some('<') | Some('>') => self.comparison_or_shift(),
-            Some('=') if self.la('>') => { self.take(); self.take_emit(TokenKind::Punctuator) },
+            Some('=') if self.la('>') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::Arrow)),
             Some('=') | Some('!') => self.equality(),
-            Some('&') if self.la('&') => { self.take(); self.take_emit(TokenKind::Punctuator) },
-            Some('|') if self.la('|') => { self.take(); self.take_emit(TokenKind::Punctuator) },
-            Some('+') if self.la('+') => { self.take(); self.take_emit(TokenKind::Punctuator) },
-            Some('-') if self.la('-') => { self.take(); self.take_emit(TokenKind::Punctuator) },
-            Some('+') |
-                Some('-') |
-                Some('*') |
-                Some('/') |
-                Some('%') |
-                Some('&') |
-                Some('^') |
-                Some('|') => self.arith_and_logic(),
+            Some('&') if self.la('&') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::AndAnd)),
+            Some('|') if self.la('|') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::OrOr)),
+            Some('+') if self.la('+') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::Increment)),
+            Some('-') if self.la('-') => self.take_emit(2, TokenKind::Punctuator, TokenValue::Op(Operator::Decrement)),
+            Some('+') => self.arith_and_logic(Operator::Plus, Operator::PlusAssign),
+            Some('-') => self.arith_and_logic(Operator::Minus, Operator::MinusAssign),
+            Some('*') => self.arith_and_logic(Operator::Star, Operator::StarAssign),
+            Some('/') => self.arith_and_logic(Operator::Divide, Operator::DivideAssign),
+            Some('%') => self.arith_and_logic(Operator::Percent, Operator::PercentAssign),
+            Some('&') => self.arith_and_logic(Operator::And, Operator::AndAssign),
+            Some('^') => self.arith_and_logic(Operator::Xor, Operator::XorAssign),
+            Some('|') => self.arith_and_logic(Operator::Or, Operator::OrAssign),
 
             // Fallback cases
             Some(x) => self.unknown(),
@@ -462,7 +495,7 @@ fn is_hex_digit(ch: char) -> bool {
 #[cfg(test)]
 mod test {
     use tendril::StrTendril;
-    use lang::{Lexer,Token,TokenKind,TokenValue};
+    use lang::{Lexer,Token,TokenKind,TokenValue,Keyword,Operator};
     use std::str::FromStr;
 
     macro_rules! token_test {
@@ -557,54 +590,91 @@ mod test {
     }
 
     #[test]
+    pub fn keyword_tokens() {
+        token_test!("break", IdentifierName("break", TokenValue::Kwd(Keyword::Break)));
+        token_test!("case", IdentifierName("case", TokenValue::Kwd(Keyword::Case)));
+        token_test!("catch", IdentifierName("catch", TokenValue::Kwd(Keyword::Catch)));
+        token_test!("class", IdentifierName("class", TokenValue::Kwd(Keyword::Class)));
+        token_test!("const", IdentifierName("const", TokenValue::Kwd(Keyword::Const)));
+        token_test!("continue", IdentifierName("continue", TokenValue::Kwd(Keyword::Continue)));
+        token_test!("debugger", IdentifierName("debugger", TokenValue::Kwd(Keyword::Debugger)));
+        token_test!("default", IdentifierName("default", TokenValue::Kwd(Keyword::Default)));
+        token_test!("delete", IdentifierName("delete", TokenValue::Kwd(Keyword::Delete)));
+        token_test!("do", IdentifierName("do", TokenValue::Kwd(Keyword::Do)));
+        token_test!("else", IdentifierName("else", TokenValue::Kwd(Keyword::Else)));
+        token_test!("export", IdentifierName("export", TokenValue::Kwd(Keyword::Export)));
+        token_test!("extends", IdentifierName("extends", TokenValue::Kwd(Keyword::Extends)));
+        token_test!("finally", IdentifierName("finally", TokenValue::Kwd(Keyword::Finally)));
+        token_test!("for", IdentifierName("for", TokenValue::Kwd(Keyword::For)));
+        token_test!("function", IdentifierName("function", TokenValue::Kwd(Keyword::Function)));
+        token_test!("if", IdentifierName("if", TokenValue::Kwd(Keyword::If)));
+        token_test!("import", IdentifierName("import", TokenValue::Kwd(Keyword::Import)));
+        token_test!("in", IdentifierName("in", TokenValue::Kwd(Keyword::In)));
+        token_test!("instanceof", IdentifierName("instanceof", TokenValue::Kwd(Keyword::InstanceOf)));
+        token_test!("new", IdentifierName("new", TokenValue::Kwd(Keyword::New)));
+        token_test!("return", IdentifierName("return", TokenValue::Kwd(Keyword::Return)));
+        token_test!("super", IdentifierName("super", TokenValue::Kwd(Keyword::Super)));
+        token_test!("switch", IdentifierName("switch", TokenValue::Kwd(Keyword::Switch)));
+        token_test!("this", IdentifierName("this", TokenValue::Kwd(Keyword::This)));
+        token_test!("throw", IdentifierName("throw", TokenValue::Kwd(Keyword::Throw)));
+        token_test!("try", IdentifierName("try", TokenValue::Kwd(Keyword::Try)));
+        token_test!("typeof", IdentifierName("typeof", TokenValue::Kwd(Keyword::TypeOf)));
+        token_test!("var", IdentifierName("var", TokenValue::Kwd(Keyword::Var)));
+        token_test!("void", IdentifierName("void", TokenValue::Kwd(Keyword::Void)));
+        token_test!("while", IdentifierName("while", TokenValue::Kwd(Keyword::While)));
+        token_test!("with", IdentifierName("with", TokenValue::Kwd(Keyword::With)));
+        token_test!("yield", IdentifierName("yield", TokenValue::Kwd(Keyword::Yield)));
+    }
+
+    #[test]
     pub fn punctuator_tokens() {
-        token_test!("{", Punctuator("{"));
-        token_test!("}", Punctuator("}"));
-        token_test!("(", Punctuator("("));
-        token_test!(")", Punctuator(")"));
-        token_test!("[", Punctuator("["));
-        token_test!("]", Punctuator("]"));
-        token_test!(".", Punctuator("."));
-        token_test!("...", Punctuator("..."));
-        token_test!(";", Punctuator(";"));
-        token_test!(",", Punctuator(","));
-        token_test!("<", Punctuator("<"));
-        token_test!(">", Punctuator(">"));
-        token_test!("<=", Punctuator("<="));
-        token_test!(">=", Punctuator(">="));
-        token_test!("==", Punctuator("=="));
-        token_test!("!=", Punctuator("!="));
-        token_test!("===", Punctuator("==="));
-        token_test!("!==", Punctuator("!=="));
-        token_test!("+", Punctuator("+"));
-        token_test!("-", Punctuator("-"));
-        token_test!("*", Punctuator("*"));
-        token_test!("/", Punctuator("/"));
-        token_test!("%", Punctuator("%"));
-        token_test!("++", Punctuator("++"));
-        token_test!("--", Punctuator("--"));
-        token_test!("<<", Punctuator("<<"));
-        token_test!(">>", Punctuator(">>"));
-        token_test!(">>>", Punctuator(">>>"));
-        token_test!("&", Punctuator("&"));
-        token_test!("&&", Punctuator("&&"));
-        token_test!("|", Punctuator("|"));
-        token_test!("||", Punctuator("||"));
-        token_test!("?", Punctuator("?"));
-        token_test!(":", Punctuator(":"));
-        token_test!("=", Punctuator("="));
-        token_test!("+=", Punctuator("+="));
-        token_test!("-=", Punctuator("-="));
-        token_test!("*=", Punctuator("*="));
-        token_test!("/=", Punctuator("/="));
-        token_test!("%=", Punctuator("%="));
-        token_test!("<<=", Punctuator("<<="));
-        token_test!(">>=", Punctuator(">>="));
-        token_test!(">>>=", Punctuator(">>>="));
-        token_test!("&=", Punctuator("&="));
-        token_test!("|=", Punctuator("|="));
-        token_test!("^=", Punctuator("^="));
-        token_test!("=>", Punctuator("=>"));
+        token_test!("{", Punctuator("{", TokenValue::Op(Operator::LBrace)));
+        token_test!("}", Punctuator("}", TokenValue::Op(Operator::RBrace)));
+        token_test!("(", Punctuator("(", TokenValue::Op(Operator::LParen)));
+        token_test!(")", Punctuator(")", TokenValue::Op(Operator::RParen)));
+        token_test!("[", Punctuator("[", TokenValue::Op(Operator::LBracket)));
+        token_test!("]", Punctuator("]", TokenValue::Op(Operator::RBracket)));
+        token_test!(".", Punctuator(".", TokenValue::Op(Operator::Dot)));
+        token_test!("...", Punctuator("...", TokenValue::Op(Operator::Elipsis)));
+        token_test!(";", Punctuator(";", TokenValue::Op(Operator::Semicolon)));
+        token_test!(",", Punctuator(",", TokenValue::Op(Operator::Comma)));
+        token_test!("<", Punctuator("<", TokenValue::Op(Operator::LessThan)));
+        token_test!(">", Punctuator(">", TokenValue::Op(Operator::GreaterThan)));
+        token_test!("<=", Punctuator("<=", TokenValue::Op(Operator::LessThanEqual)));
+        token_test!(">=", Punctuator(">=", TokenValue::Op(Operator::GreaterThanEqual)));
+        token_test!("==", Punctuator("==", TokenValue::Op(Operator::Equal)));
+        token_test!("!=", Punctuator("!=", TokenValue::Op(Operator::NotEqual)));
+        token_test!("===", Punctuator("===", TokenValue::Op(Operator::Identical)));
+        token_test!("!==", Punctuator("!==", TokenValue::Op(Operator::NotIdentical)));
+        token_test!("+", Punctuator("+", TokenValue::Op(Operator::Plus)));
+        token_test!("-", Punctuator("-", TokenValue::Op(Operator::Minus)));
+        token_test!("*", Punctuator("*", TokenValue::Op(Operator::Star)));
+        token_test!("/", Punctuator("/", TokenValue::Op(Operator::Divide)));
+        token_test!("%", Punctuator("%", TokenValue::Op(Operator::Percent)));
+        token_test!("++", Punctuator("++", TokenValue::Op(Operator::Increment)));
+        token_test!("--", Punctuator("--", TokenValue::Op(Operator::Decrement)));
+        token_test!("<<", Punctuator("<<", TokenValue::Op(Operator::LeftShift)));
+        token_test!(">>", Punctuator(">>", TokenValue::Op(Operator::RightShift)));
+        token_test!(">>>", Punctuator(">>>", TokenValue::Op(Operator::UnsignedRightShift)));
+        token_test!("&", Punctuator("&", TokenValue::Op(Operator::And)));
+        token_test!("&&", Punctuator("&&", TokenValue::Op(Operator::AndAnd)));
+        token_test!("|", Punctuator("|", TokenValue::Op(Operator::Or)));
+        token_test!("||", Punctuator("||", TokenValue::Op(Operator::OrOr)));
+        token_test!("?", Punctuator("?", TokenValue::Op(Operator::Question)));
+        token_test!(":", Punctuator(":", TokenValue::Op(Operator::Colon)));
+        token_test!("=", Punctuator("=", TokenValue::Op(Operator::Assign)));
+        token_test!("+=", Punctuator("+=", TokenValue::Op(Operator::PlusAssign)));
+        token_test!("-=", Punctuator("-=", TokenValue::Op(Operator::MinusAssign)));
+        token_test!("*=", Punctuator("*=", TokenValue::Op(Operator::StarAssign)));
+        token_test!("/=", Punctuator("/=", TokenValue::Op(Operator::DivideAssign)));
+        token_test!("%=", Punctuator("%=", TokenValue::Op(Operator::PercentAssign)));
+        token_test!("<<=", Punctuator("<<=", TokenValue::Op(Operator::LeftShiftAssign)));
+        token_test!(">>=", Punctuator(">>=", TokenValue::Op(Operator::RightShiftAssign)));
+        token_test!(">>>=", Punctuator(">>>=", TokenValue::Op(Operator::UnsignedRightShiftAssign)));
+        token_test!("&=", Punctuator("&=", TokenValue::Op(Operator::AndAssign)));
+        token_test!("|=", Punctuator("|=", TokenValue::Op(Operator::OrAssign)));
+        token_test!("^=", Punctuator("^=", TokenValue::Op(Operator::XorAssign)));
+        token_test!("=>", Punctuator("=>", TokenValue::Op(Operator::Arrow)));
     }
 
     #[test]
